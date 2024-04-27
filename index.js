@@ -1,8 +1,9 @@
 import express from 'express';
+import 'dotenv/config';
 import { MongoClient } from 'mongodb';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
-import faker from 'faker';
+// import faker from 'faker';
 
 const app = express();
 const port = 3000;
