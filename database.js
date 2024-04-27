@@ -1,8 +1,8 @@
 import { MongoClient } from 'mongodb';
 import faker from 'faker';
 
-const mongoUrl = 'mongodb://localhost:27017';
-const dbName = 'your_database_name';
+const mongoUrl = process.env.MONGO_URI
+const dbName = process.env.DB_NAME
 
 async function connectToMongoDB() {
     const client = new MongoClient(mongoUrl);

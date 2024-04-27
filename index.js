@@ -1,5 +1,7 @@
 import express from 'express';
 import { MongoClient } from 'mongodb';
+import bcrypt from 'bcrypt';
+import jwt from 'jsonwebtoken';
 import faker from 'faker';
 
 const app = express();
@@ -7,6 +9,9 @@ const port = 3000;
 
 const mongoUrl = process.env.MONGO_URI
 const dbName = process.env.DB_NAME
+
+const jwtSecret = 'your_secret_key';
+const saltRounds = 10;
 
 // Connect to MongoDB
 const connectToMongoDB = async () => {
@@ -23,46 +28,76 @@ const connectToMongoDB = async () => {
 // Middleware for parsing JSON bodies
 app.use(express.json());
 
-// Routes for Admin
-app.get('/admin', async (req, res) => {
+// Admin authentication logic
+app.post('/admin/login', async (req, res) => {
+    const { admin_id, password } = req.body;
+
     const db = await connectToMongoDB();
-    const admin = await db.collection('admin').find().toArray();
-    res.json(admin);
+    const admin = await db.collection('admin').findOne({ admin_id });
+
+    if (!admin || !bcrypt.compareSync(password, admin.password)) {
+        return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    const token = jwt.sign({ admin_id }, jwtSecret, { expiresIn: '1h' });
+    res.json({ token });
 });
 
-// Routes for User
-app.get('/user', async (req, res) => {
-    const db = await connectToMongoDB();
-    const user = await db.collection('user').find().toArray();
-    res.json(user);
+// Middleware for verifying JWT token
+const verifyToken = (req, res, next) => {
+    const token = req.headers['authorization']?.split(' ')[1];
+    if (!token) {
+        return res.status(403).json({ error: 'Token not provided' });
+    }
+
+    jwt.verify(token, jwtSecret, (err, decoded) => {
+        if (err) {
+            return res.status(401).json({ error: 'Failed to authenticate token' });
+        }
+        req.admin_id = decoded.admin_id;
+        next();
+    });
+};
+
+// Protected Admin endpoint
+app.get('/admin/protected', verifyToken, (req, res) => {
+    res.json({ message: 'Protected admin endpoint accessed successfully' });
 });
 
-// Routes for Dealership
-app.get('/dealership', async (req, res) => {
+// Sample data generation endpoint
+app.get('/generate-data', async (req, res) => {
     const db = await connectToMongoDB();
-    const dealership = await db.collection('dealership').find().toArray();
-    res.json(dealership);
-});
 
-// Routes for Deal
-app.get('/deal', async (req, res) => {
-    const db = await connectToMongoDB();
-    const deal = await db.collection('deal').find().toArray();
-    res.json(deal);
-});
+    // Generate sample data for admin
+    const adminData = {
+        admin_id: 'admin1',
+        password: bcrypt.hashSync('adminpassword', saltRounds)
+    };
+    await db.collection('admin').insertOne(adminData);
 
-// Routes for Cars
-app.get('/cars', async (req, res) => {
-    const db = await connectToMongoDB();
-    const cars = await db.collection('cars').find().toArray();
-    res.json(cars);
-});
+    // Generate sample data for users
+    const userData = [];
+    for (let i = 0; i < 5; i++) {
+        const user = {
+            user_email: faker.internet.email(),
+            password: bcrypt.hashSync('userpassword', saltRounds)
+        };
+        userData.push(user);
+    }
+    await db.collection('user').insertMany(userData);
 
-// Routes for Sold Vehicles
-app.get('/sold_vehicles', async (req, res) => {
-    const db = await connectToMongoDB();
-    const soldVehicles = await db.collection('sold_vehicles').find().toArray();
-    res.json(soldVehicles);
+    // Generate sample data for dealerships
+    const dealershipData = [];
+    for (let i = 0; i < 3; i++) {
+        const dealership = {
+            dealership_email: faker.internet.email(),
+            password: bcrypt.hashSync('dealershippassword', saltRounds)
+        };
+        dealershipData.push(dealership);
+    }
+    await db.collection('dealership').insertMany(dealershipData);
+
+    res.json({ message: 'Sample data generated successfully' });
 });
 
 // Start the server
